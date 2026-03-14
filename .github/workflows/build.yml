@@ -75,12 +75,12 @@ jobs:
       - name: Cache vcpkg binary packages
         uses: actions/cache@v4
         with:
-          path: ~/.cache/vcpkg/archives
+          path: ${{ runner.temp }}/vcpkg-cache
           key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ matrix.name }}-
 
       - name: Enable vcpkg binary caching
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,$HOME/.cache/vcpkg/archives,readwrite" >> "$GITHUB_ENV"
+        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
