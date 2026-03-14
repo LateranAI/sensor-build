@@ -69,9 +69,6 @@ jobs:
         shell: msys2 {0}
         run: echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
       - name: Cache vcpkg binary packages
         uses: actions/cache@v4
         with:
@@ -91,8 +88,6 @@ jobs:
         run: |
           cmake_args=(-B build -S . -G Ninja
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
             -DCMAKE_BUILD_TYPE=Release)
 
           if [[ "${{ runner.os }}" == "Windows" ]]; then
