@@ -70,10 +70,10 @@ jobs:
         run: echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: vcpkg-cache
-          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
           restore-keys: vcpkg-${{ matrix.name }}-
 
       - name: Setup vcpkg
@@ -84,7 +84,7 @@ jobs:
       - name: Enable vcpkg binary caching
         run: |
           mkdir -p "${{ github.workspace }}/vcpkg-cache"
-          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> "$GITHUB_ENV"
+          echo "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
       - name: Configure CMake
         run: |
@@ -129,10 +129,10 @@ jobs:
 
       - name: Save vcpkg binary cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: vcpkg-cache
-          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
 
       - name: Set final status
         if: always()
