@@ -72,17 +72,20 @@ jobs:
       - name: Cache vcpkg binary packages
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
+          path: vcpkg-cache
           key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ matrix.name }}-
-
-      - name: Enable vcpkg binary caching
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+          save-always: true
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 'e5a1490e1409d175932ef6014519e9ae149ddb7c'
+
+      - name: Enable vcpkg binary caching
+        run: |
+          mkdir -p "${{ github.workspace }}/vcpkg-cache"
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> "$GITHUB_ENV"
 
       - name: Configure CMake
         run: |
