@@ -69,13 +69,12 @@ jobs:
         shell: msys2 {0}
         run: echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
-      - name: Cache vcpkg binary packages
-        uses: actions/cache@v4
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v4
         with:
           path: vcpkg-cache
           key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ matrix.name }}-
-          save-always: true
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -127,6 +126,13 @@ jobs:
         with:
           name: proctor-${{ matrix.name }}
           path: staging/
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Set final status
         if: always()
