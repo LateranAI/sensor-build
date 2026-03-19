@@ -62,19 +62,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-ninja autoconf automake libtool make
-
-      - name: Pin GCC version
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        env:
-          MINGW_ARCH: mingw-w64-x86_64
-          GCC_VERSION: "15.2.0-13"
-          MSYS2_REPO: https://repo.msys2.org/mingw/mingw64
-        run: |
-          pacman --noconfirm -U \
-            "$MSYS2_REPO/$MINGW_ARCH-gcc-libs-$GCC_VERSION-any.pkg.tar.zst" \
-            "$MSYS2_REPO/$MINGW_ARCH-gcc-$GCC_VERSION-any.pkg.tar.zst"
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja autoconf automake libtool make
 
       - name: Add MinGW to PATH
         if: runner.os == 'Windows'
@@ -99,7 +87,6 @@ jobs:
       - name: Configure CMake
         env:
           VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
-          VCPKG_DEBUG: "1"
         run: |
           cmake_args=(-B build -S . -G Ninja
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
