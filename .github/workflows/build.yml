@@ -76,17 +76,24 @@ jobs:
           key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
           restore-keys: vcpkg-${{ matrix.name }}-
 
+      - name: Debug cache contents
+        run: |
+          echo "=== workspace contents ==="
+          ls -la vcpkg-cache/ 2>/dev/null | head -20 || echo "vcpkg-cache/ not found"
+          echo "=== file count ==="
+          find vcpkg-cache/ -type f 2>/dev/null | wc -l || echo "0"
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 'e5a1490e1409d175932ef6014519e9ae149ddb7c'
 
-      - name: Enable vcpkg binary caching
-        run: |
-          mkdir -p "${{ github.workspace }}/vcpkg-cache"
-          echo "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+      - name: Prepare vcpkg binary cache directory
+        run: mkdir -p "${{ github.workspace }}/vcpkg-cache"
 
       - name: Configure CMake
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
         run: |
           cmake_args=(-B build -S . -G Ninja
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
