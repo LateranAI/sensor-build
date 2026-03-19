@@ -62,7 +62,19 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja autoconf automake libtool make
+          install: mingw-w64-x86_64-ninja autoconf automake libtool make
+
+      - name: Pin GCC version
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          MINGW_ARCH: mingw-w64-x86_64
+          GCC_VERSION: "15.2.0-13"
+          MSYS2_REPO: https://repo.msys2.org/mingw/mingw64
+        run: |
+          pacman --noconfirm -U \
+            "$MSYS2_REPO/$MINGW_ARCH-gcc-libs-$GCC_VERSION-any.pkg.tar.zst" \
+            "$MSYS2_REPO/$MINGW_ARCH-gcc-$GCC_VERSION-any.pkg.tar.zst"
 
       - name: Add MinGW to PATH
         if: runner.os == 'Windows'
@@ -75,13 +87,6 @@ jobs:
           path: vcpkg-cache
           key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
           restore-keys: vcpkg-${{ matrix.name }}-
-
-      - name: Debug cache contents
-        run: |
-          echo "=== workspace contents ==="
-          ls -la vcpkg-cache/ 2>/dev/null | head -20 || echo "vcpkg-cache/ not found"
-          echo "=== file count ==="
-          find vcpkg-cache/ -type f 2>/dev/null | wc -l || echo "0"
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -97,6 +102,7 @@ jobs:
         run: |
           cmake_args=(-B build -S . -G Ninja
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+            -DVCPKG_INSTALL_OPTIONS="--debug"
             -DCMAKE_BUILD_TYPE=Release)
 
           if [[ "${{ runner.os }}" == "Windows" ]]; then
