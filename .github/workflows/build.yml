@@ -133,6 +133,9 @@ jobs:
             # Copy any DLLs produced by the build
             find build -maxdepth 1 -name '*.dll' -exec cp {} staging/ \; 2>/dev/null || true
           fi
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            cp build/crashpad_handler staging/
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
