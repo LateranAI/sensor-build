@@ -106,6 +106,19 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Upload debug symbols to Sentry
+        run: |
+          npm install -g @sentry/cli
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            sentry-cli debug-files upload build/proctor.dSYM
+          else
+            sentry-cli debug-files upload build/proctor.exe.debug
+          fi
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+
       - name: Prepare artifacts
         run: |
           mkdir -p staging
