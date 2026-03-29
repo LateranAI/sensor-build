@@ -112,7 +112,7 @@ jobs:
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             sentry-cli debug-files upload build/proctor.dSYM
           else
-            sentry-cli debug-files upload build/proctor.exe.full
+            sentry-cli debug-files upload build/proctor.pdb
           fi
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
