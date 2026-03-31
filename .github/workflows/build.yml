@@ -109,11 +109,7 @@ jobs:
       - name: Upload debug symbols to Sentry
         run: |
           npm install -g @sentry/cli
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            sentry-cli debug-files upload build/proctor.dSYM
-          else
-            sentry-cli debug-files upload build/proctor.pdb
-          fi
+          sentry-cli debug-files upload build
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
