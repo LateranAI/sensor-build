@@ -106,16 +106,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Upload debug symbols to Sentry
-        run: |
-          npm install -g @sentry/cli
-          sentry-cli debug-files upload build
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-
-      - name: Prepare artifacts
+      - name: Prepare artifacts & clean build folder
         run: |
           mkdir -p staging
           cp "build/${{ matrix.binary }}" staging/
@@ -132,6 +123,18 @@ jobs:
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             cp build/crashpad_handler staging/
           fi
+
+          # Remove unrelated files prior to Sentry DIF upload, CMake not used after this
+          rm -Rf build/CMakeFiles build/vcpkg_installed
+
+      - name: Upload debug symbols to Sentry
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli debug-files upload build
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
