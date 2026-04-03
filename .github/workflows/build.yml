@@ -6,20 +6,18 @@ on:
     types: [build]
 
 jobs:
-  build:
+  build-macos:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            name: macos
-            binary: proctor
-          - os: windows-latest
-            name: windows
-            binary: proctor.exe
+          - arch: arm64
+            triplet: arm64-osx
+          - arch: x64
+            triplet: x64-osx
 
-    runs-on: ${{ matrix.os }}
-    name: Build (${{ matrix.name }})
+    runs-on: macos-latest
+    name: Build (macos-${{ matrix.arch }})
 
     defaults:
       run:
@@ -40,7 +38,7 @@ jobs:
         run: |
           gh api repos/LateranAI/proctor-svc/statuses/${{ steps.sha.outputs.sha }} \
             -f state=pending \
-            -f context="build/${{ matrix.name }}" \
+            -f context="build/macos" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             -f description="Build in progress"
         env:
@@ -49,32 +47,17 @@ jobs:
       - name: Install CMake and Ninja
         uses: lukka/get-cmake@latest
 
-      - name: Install build dependencies (macOS)
-        if: runner.os == 'macOS'
+      - name: Install build dependencies
         run: brew install autoconf automake libtool ninja nasm
-
-      - name: Install NASM
-        if: runner.os != 'macOS'
-        uses: ilammy/setup-nasm@v1
-
-      - name: Setup MSYS2 MinGW
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja autoconf automake libtool make
-
-      - name: Add MinGW to PATH
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
       - name: Restore vcpkg binary cache
         uses: actions/cache/restore@v5
         with:
           path: vcpkg-cache
-          key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
-          restore-keys: vcpkg-${{ matrix.name }}-
+          key: vcpkg-macos-${{ matrix.arch }}-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-macos-${{ matrix.arch }}-
+            vcpkg-macos-
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -90,15 +73,11 @@ jobs:
         run: |
           cmake_args=(-B build -S . -G Ninja
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-            -DCMAKE_BUILD_TYPE=Release)
+            -DCMAKE_BUILD_TYPE=Release
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }})
 
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cmake_args+=(
-              -DVCPKG_TARGET_TRIPLET=x64-mingw-static
-              -DVCPKG_HOST_TRIPLET=x64-mingw-static
-              -DCMAKE_C_COMPILER=gcc
-              -DCMAKE_CXX_COMPILER=g++
-            )
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            cmake_args+=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
           fi
 
           cmake "${cmake_args[@]}"
@@ -106,26 +85,218 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Prepare artifacts
+        run: |
+          mkdir -p staging
+          cp build/proctor staging/
+          [[ -f build/crashpad_handler ]] && cp build/crashpad_handler staging/
+
+          # Clean build directory for debug symbol upload
+          rm -rf build/CMakeFiles build/vcpkg_installed
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: proctor-macos-${{ matrix.arch }}-bin
+          path: staging/
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: proctor-macos-${{ matrix.arch }}-debug
+          path: build/
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: vcpkg-cache
+          key: vcpkg-macos-${{ matrix.arch }}-${{ github.run_id }}
+
+  package-macos:
+    needs: build-macos
+    if: always()
+    runs-on: macos-latest
+    name: Package (macos)
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: LateranAI/proctor-svc
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Get commit SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Download arm64 binaries
+        if: needs.build-macos.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: proctor-macos-arm64-bin
+          path: bin-arm64/
+
+      - name: Download x64 binaries
+        if: needs.build-macos.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: proctor-macos-x64-bin
+          path: bin-x64/
+
+      - name: Download arm64 debug symbols
+        if: needs.build-macos.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: proctor-macos-arm64-debug
+          path: debug-arm64/
+
+      - name: Download x64 debug symbols
+        if: needs.build-macos.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: proctor-macos-x64-debug
+          path: debug-x64/
+
+      - name: Create universal binary
+        if: needs.build-macos.result == 'success'
+        run: |
+          mkdir -p staging
+          lipo -create bin-arm64/proctor bin-x64/proctor -output staging/proctor
+          chmod +x staging/proctor
+
+          if [[ -f bin-arm64/crashpad_handler && -f bin-x64/crashpad_handler ]]; then
+            lipo -create bin-arm64/crashpad_handler bin-x64/crashpad_handler -output staging/crashpad_handler
+            chmod +x staging/crashpad_handler
+          fi
+
+          lipo -info staging/proctor
+
+      - name: Upload debug symbols to Sentry
+        if: needs.build-macos.result == 'success'
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli debug-files upload debug-arm64 debug-x64
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+
+      - name: Upload artifact
+        if: needs.build-macos.result == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: proctor-macos
+          path: staging/
+
+      - name: Set final status
+        if: always()
+        run: |
+          if [[ "${{ needs.build-macos.result }}" == "success" && "${{ job.status }}" == "success" ]]; then
+            state=success
+          else
+            state=failure
+          fi
+          gh api repos/LateranAI/proctor-svc/statuses/${{ steps.sha.outputs.sha }} \
+            -f state="$state" \
+            -f context="build/macos" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            -f description="Build $state"
+        env:
+          GH_TOKEN: ${{ secrets.PROCTOR_STATUS_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    name: Build (windows)
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: LateranAI/proctor-svc
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Get commit SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set pending status
+        run: |
+          gh api repos/LateranAI/proctor-svc/statuses/${{ steps.sha.outputs.sha }} \
+            -f state=pending \
+            -f context="build/windows" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            -f description="Build in progress"
+        env:
+          GH_TOKEN: ${{ secrets.PROCTOR_STATUS_TOKEN }}
+
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@latest
+
+      - name: Install NASM
+        uses: ilammy/setup-nasm@v1
+
+      - name: Setup MSYS2 MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja autoconf automake libtool make
+
+      - name: Add MinGW to PATH
+        shell: msys2 {0}
+        run: echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v5
+        with:
+          path: vcpkg-cache
+          key: vcpkg-windows-${{ github.run_id }}
+          restore-keys: vcpkg-windows-
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'e5a1490e1409d175932ef6014519e9ae149ddb7c'
+
+      - name: Prepare vcpkg binary cache directory
+        run: mkdir -p "${{ github.workspace }}/vcpkg-cache"
+
+      - name: Configure CMake
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVCPKG_TARGET_TRIPLET=x64-mingw-static \
+            -DVCPKG_HOST_TRIPLET=x64-mingw-static \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++
+
+      - name: Build
+        run: cmake --build build --config Release
+
       - name: Prepare artifacts & clean build folder
         run: |
           mkdir -p staging
-          cp "build/${{ matrix.binary }}" staging/
+          cp build/proctor.exe staging/
 
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            # Bundle any required MinGW runtime DLLs
-            MINGW_BIN="$(dirname "$(which gcc)")"
-            for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-              [[ -f "$MINGW_BIN/$dll" ]] && cp "$MINGW_BIN/$dll" staging/
-            done
-            # Copy any DLLs produced by the build
-            find build -maxdepth 1 -name '*.dll' -exec cp {} staging/ \; 2>/dev/null || true
-          fi
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            cp build/crashpad_handler staging/
-          fi
+          MINGW_BIN="$(dirname "$(which gcc)")"
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            [[ -f "$MINGW_BIN/$dll" ]] && cp "$MINGW_BIN/$dll" staging/
+          done
+          find build -maxdepth 1 -name '*.dll' -exec cp {} staging/ \; 2>/dev/null || true
 
           # Remove unrelated files prior to Sentry DIF upload, CMake not used after this
-          rm -Rf build/CMakeFiles build/vcpkg_installed
+          rm -rf build/CMakeFiles build/vcpkg_installed
 
       - name: Upload debug symbols to Sentry
         run: |
@@ -139,7 +310,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: proctor-${{ matrix.name }}
+          name: proctor-windows
           path: staging/
 
       - name: Save vcpkg binary cache
@@ -147,7 +318,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: vcpkg-cache
-          key: vcpkg-${{ matrix.name }}-${{ github.run_id }}
+          key: vcpkg-windows-${{ github.run_id }}
 
       - name: Set final status
         if: always()
@@ -155,7 +326,7 @@ jobs:
           state=${{ job.status == 'success' && 'success' || 'failure' }}
           gh api repos/LateranAI/proctor-svc/statuses/${{ steps.sha.outputs.sha }} \
             -f state="$state" \
-            -f context="build/${{ matrix.name }}" \
+            -f context="build/windows" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             -f description="Build $state"
         env:
