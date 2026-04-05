@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout private repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: LateranAI/proctor-svc
           ssh-key: ${{ secrets.DEPLOY_KEY }}
@@ -48,7 +48,7 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Install build dependencies
-        run: brew install autoconf automake libtool ninja nasm
+        run: brew install autoconf automake libtool nasm
 
       - name: Restore vcpkg binary cache
         uses: actions/cache/restore@v5
@@ -95,13 +95,13 @@ jobs:
           rm -rf build/CMakeFiles build/vcpkg_installed
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: proctor-macos-${{ matrix.arch }}-bin
           path: staging/
 
       - name: Upload debug symbols
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: proctor-macos-${{ matrix.arch }}-debug
           path: build/
@@ -188,7 +188,7 @@ jobs:
 
       - name: Upload artifact
         if: needs.build-macos.result == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: proctor-macos
           path: staging/
@@ -219,7 +219,7 @@ jobs:
 
     steps:
       - name: Checkout private repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: LateranAI/proctor-svc
           ssh-key: ${{ secrets.DEPLOY_KEY }}
@@ -308,7 +308,7 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: proctor-windows
           path: staging/
