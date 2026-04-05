@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout private repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: LateranAI/proctor-svc
           ssh-key: ${{ secrets.DEPLOY_KEY }}
@@ -136,28 +136,28 @@ jobs:
 
       - name: Download arm64 binaries
         if: needs.build-macos.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: proctor-macos-arm64-bin
           path: bin-arm64/
 
       - name: Download x64 binaries
         if: needs.build-macos.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: proctor-macos-x64-bin
           path: bin-x64/
 
       - name: Download arm64 debug symbols
         if: needs.build-macos.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: proctor-macos-arm64-debug
           path: debug-arm64/
 
       - name: Download x64 debug symbols
         if: needs.build-macos.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: proctor-macos-x64-debug
           path: debug-x64/
